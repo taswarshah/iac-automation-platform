@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { query } from '../config/database.js'
+import { query } from '../config/database.ts'
 import crypto from 'crypto'
 
 const router = Router()
