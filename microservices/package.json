@@ -1,0 +1,32 @@
+{
+  "name": "iac-platform-microservices",
+  "version": "1.0.0",
+  "description": "Enterprise IaC Automation Platform - Microservices Architecture",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run dev:gateway\" \"npm run dev:auth\" \"npm run dev:project\" \"npm run dev:template\" \"npm run dev:codegen\" \"npm run dev:policy\" \"npm run dev:deployment\"",
+    "dev:gateway": "npm run dev --workspace=api-gateway",
+    "dev:auth": "npm run dev --workspace=auth-service",
+    "dev:project": "npm run dev --workspace=project-service",
+    "dev:template": "npm run dev --workspace=template-service",
+    "dev:codegen": "npm run dev --workspace=code-gen-service",
+    "dev:policy": "npm run dev --workspace=policy-service",
+    "dev:deployment": "npm run dev --workspace=deployment-service",
+    "build": "npm run build --workspaces",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f"
+  },
+  "workspaces": [
+    "api-gateway",
+    "auth-service",
+    "project-service",
+    "template-service",
+    "code-gen-service",
+    "policy-service",
+    "deployment-service"
+  ],
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

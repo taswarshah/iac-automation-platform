@@ -1,0 +1,121 @@
+version: '3.8'
+
+services:
+  # API Gateway
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - AUTH_SERVICE_URL=http://auth-service:3001
+      - PROJECT_SERVICE_URL=http://project-service:3002
+      - TEMPLATE_SERVICE_URL=http://template-service:3003
+      - CODE_GEN_SERVICE_URL=http://code-gen-service:3004
+      - POLICY_SERVICE_URL=http://policy-service:3005
+      - DEPLOYMENT_SERVICE_URL=http://deployment-service:3006
+      - JWT_SECRET=${JWT_SECRET:-dev-secret-key}
+      - CORS_ORIGIN=http://localhost:5173
+    depends_on:
+      - auth-service
+      - project-service
+      - template-service
+      - code-gen-service
+      - policy-service
+      - deployment-service
+    networks:
+      - iac-network
+
+  # Auth Service
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - JWT_SECRET=${JWT_SECRET:-dev-secret-key}
+    networks:
+      - iac-network
+
+  # Project Service
+  project-service:
+    build:
+      context: ./project-service
+      dockerfile: Dockerfile
+    ports:
+      - "3002:3002"
+    environment:
+      - PORT=3002
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+    networks:
+      - iac-network
+
+  # Template Service
+  template-service:
+    build:
+      context: ./template-service
+      dockerfile: Dockerfile
+    ports:
+      - "3003:3003"
+    environment:
+      - PORT=3003
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+    networks:
+      - iac-network
+
+  # Code Generation Service
+  code-gen-service:
+    build:
+      context: ./code-gen-service
+      dockerfile: Dockerfile
+    ports:
+      - "3004:3004"
+    environment:
+      - PORT=3004
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+    networks:
+      - iac-network
+
+  # Policy Service
+  policy-service:
+    build:
+      context: ./policy-service
+      dockerfile: Dockerfile
+    ports:
+      - "3005:3005"
+    environment:
+      - PORT=3005
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+    networks:
+      - iac-network
+
+  # Deployment Service
+  deployment-service:
+    build:
+      context: ./deployment-service
+      dockerfile: Dockerfile
+    ports:
+      - "3006:3006"
+    environment:
+      - PORT=3006
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+    networks:
+      - iac-network
+
+networks:
+  iac-network:
+    driver: bridge
+
+volumes:
+  supabase-data:

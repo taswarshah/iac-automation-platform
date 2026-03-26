@@ -1,0 +1,128 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: iac-platform-db
+    environment:
+      POSTGRES_USER: iacplatform
+      POSTGRES_PASSWORD: iacplatform123
+      POSTGRES_DB: iac_platform
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U iacplatform"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - AUTH_SERVICE_URL=http://auth-service:3001
+      - JWT_SECRET=038aa3b2-7863-4e43-83d3-9a56a3d1fa4a
+      - CORS_ORIGIN=http://localhost:5173
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Auth Service
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - DATABASE_URL=postgresql://iacplatform:iacplatform123@postgres:5432/iac_platform
+      - JWT_SECRET=038aa3b2-7863-4e43-83d3-9a56a3d1fa4a
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Project Service
+  project-service:
+    build:
+      context: ./project-service
+      dockerfile: Dockerfile
+    ports:
+      - "3002:3002"
+    environment:
+      - PORT=3002
+      - DATABASE_URL=postgresql://iacplatform:iacplatform123@postgres:5432/iac_platform
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Template Service
+  template-service:
+    build:
+      context: ./template-service
+      dockerfile: Dockerfile
+    ports:
+      - "3003:3003"
+    environment:
+      - PORT=3003
+      - DATABASE_URL=postgresql://iacplatform:iacplatform123@postgres:5432/iac_platform
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Code Generation Service
+  code-gen-service:
+    build:
+      context: ./code-gen-service
+      dockerfile: Dockerfile
+    ports:
+      - "3004:3004"
+    environment:
+      - PORT=3004
+      - DATABASE_URL=postgresql://iacplatform:iacplatform123@postgres:5432/iac_platform
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Policy Service
+  policy-service:
+    build:
+      context: ./policy-service
+      dockerfile: Dockerfile
+    ports:
+      - "3005:3005"
+    environment:
+      - PORT=3005
+      - DATABASE_URL=postgresql://iacplatform:iacplatform123@postgres:5432/iac_platform
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Deployment Service
+  deployment-service:
+    build:
+      context: ./deployment-service
+      dockerfile: Dockerfile
+    ports:
+      - "3006:3006"
+    environment:
+      - PORT=3006
+      - DATABASE_URL=postgresql://iacplatform:iacplatform123@postgres:5432/iac_platform
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+networks:
+  default:
+    name: iac-network
+
+volumes:
+  postgres_data:

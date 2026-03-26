@@ -1,0 +1,16 @@
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+build/
+**/build/
+.env
+.env.*
+*.log
+.DS_Store
+.idea/
+.vscode/
+.terraform/
+*.tfstate
+*.tfstate.*
+Azure/terraform-provider-azurerm-main/
