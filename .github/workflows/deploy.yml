@@ -1,0 +1,71 @@
+name: Build and Deploy to Azure
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [
+          'api-gateway', 
+          'auth-service', 
+          'project-service', 
+          'template-service', 
+          'code-gen-service', 
+          'policy-service', 
+          'deployment-service', 
+          'drift-service', 
+          'notification-service'
+        ]
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Login to ACR
+        run: |
+          az acr login --name iacplatformacrdev
+
+      - name: Build and Push Docker image
+        run: |
+          cd microservices/${{ matrix.service }}
+          docker build -t iacplatformacrdev.azurecr.io/iac-${{ matrix.service }}:latest .
+          docker push iacplatformacrdev.azurecr.io/iac-${{ matrix.service }}:latest
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy to Container Apps
+        run: |
+          az extension add --name containerapp --upgrade
+          
+          SERVICES=(
+            "api-gateway" "auth-service" "project-service" "template-service" 
+            "code-gen-service" "policy-service" "deployment-service" 
+            "drift-service" "notification-service"
+          )
+          
+          for SERVICE in "${SERVICES[@]}"; do
+            echo "Deploying $SERVICE..."
+            az containerapp update \
+              --name iac-$SERVICE \
+              --resource-group iac-platform-dev-rg \
+              --image iacplatformacrdev.azurecr.io/iac-$SERVICE:latest
+          done
