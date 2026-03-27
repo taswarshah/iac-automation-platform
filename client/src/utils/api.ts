@@ -1,4 +1,25 @@
+import { useAppStore } from '@/stores'
+
 const API_BASE = '/api'
+
+const request = async (url: string, options: RequestInit = {}) => {
+  const token = localStorage.getItem('token')
+  const headers = {
+    ...options.headers,
+    'Authorization': token ? `Bearer ${token}` : '',
+  }
+
+  const response = await fetch(url, { ...options, headers })
+
+  if (response.status === 401) {
+    // Session expired or invalid
+    useAppStore.getState().logout()
+    window.location.href = '/login'
+    throw new Error('Unauthorized')
+  }
+
+  return response
+}
 
 export const api = {
   // Credentials
@@ -6,7 +27,7 @@ export const api = {
     const url = organizationId 
       ? `${API_BASE}/credentials?organization_id=${organizationId}`
       : `${API_BASE}/credentials`
-    const res = await fetch(url)
+    const res = await request(url)
     return res.json()
   },
 
@@ -23,7 +44,7 @@ export const api = {
     regions?: string[]
     created_by?: string
   }) {
-    const res = await fetch(`${API_BASE}/credentials`, {
+    const res = await request(`${API_BASE}/credentials`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
@@ -32,14 +53,14 @@ export const api = {
   },
 
   async deleteCredential(id: string) {
-    const res = await fetch(`${API_BASE}/credentials/${id}`, {
+    const res = await request(`${API_BASE}/credentials/${id}`, {
       method: 'DELETE'
     })
     return res.ok
   },
 
   async testCredential(id: string) {
-    const res = await fetch(`${API_BASE}/credentials/${id}/test`, {
+    const res = await request(`${API_BASE}/credentials/${id}/test`, {
       method: 'POST'
     })
     return res.json()
@@ -50,7 +71,7 @@ export const api = {
     const url = organizationId
       ? `${API_BASE}/projects?organization_id=${organizationId}`
       : `${API_BASE}/projects`
-    const res = await fetch(url)
+    const res = await request(url)
     return res.json()
   },
 
@@ -61,7 +82,7 @@ export const api = {
     ia_type: string
     created_by: string
   }) {
-    const res = await fetch(`${API_BASE}/projects`, {
+    const res = await request(`${API_BASE}/projects`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
@@ -70,7 +91,7 @@ export const api = {
   },
 
   async getProject(id: string) {
-    const res = await fetch(`${API_BASE}/projects/${id}/full`)
+    const res = await request(`${API_BASE}/projects/${id}/full`)
     return res.json()
   },
 
@@ -87,7 +108,7 @@ export const api = {
     ia_type?: string
     created_by?: string
   }) {
-    const res = await fetch(`${API_BASE}/projects/${id}/save`, {
+    const res = await request(`${API_BASE}/projects/${id}/save`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
@@ -96,7 +117,7 @@ export const api = {
   },
 
   async deleteProject(id: string) {
-    const res = await fetch(`${API_BASE}/projects/${id}`, {
+    const res = await request(`${API_BASE}/projects/${id}`, {
       method: 'DELETE'
     })
     return res.ok
@@ -111,7 +132,7 @@ export const api = {
     resources: any[]
     created_by: string
   }) {
-    const res = await fetch(`${API_BASE}/provision/provision`, {
+    const res = await request(`${API_BASE}/provision/provision`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
@@ -126,7 +147,7 @@ export const api = {
     resources: any[]
     created_by: string
   }) {
-    const res = await fetch(`${API_BASE}/provision/destroy`, {
+    const res = await request(`${API_BASE}/provision/destroy`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
@@ -136,13 +157,13 @@ export const api = {
 
   // Templates
   async getTemplates() {
-    const res = await fetch(`${API_BASE}/templates`)
+    const res = await request(`${API_BASE}/templates`)
     return res.json()
   },
 
   // Policy
   async checkPolicies(nodes: any[]) {
-    const res = await fetch(`${API_BASE}/policy/check`, {
+    const res = await request(`${API_BASE}/policy/check`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ nodes })
@@ -152,7 +173,7 @@ export const api = {
 
   // Generate code
   async generateTerraform(nodes: any[], edges: any[]) {
-    const res = await fetch(`${API_BASE}/generate/terraform`, {
+    const res = await request(`${API_BASE}/generate/terraform`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ nodes, edges })
@@ -161,7 +182,7 @@ export const api = {
   },
 
   async generateKubernetes(nodes: any[], edges: any[]) {
-    const res = await fetch(`${API_BASE}/generate/kubernetes`, {
+    const res = await request(`${API_BASE}/generate/kubernetes`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ nodes, edges })
@@ -174,23 +195,23 @@ export const api = {
     const url = organizationId
       ? `${API_BASE}/deployments?organization_id=${organizationId}`
       : `${API_BASE}/deployments`
-    const res = await fetch(url)
+    const res = await request(url)
     return res.json()
   },
 
   // Organizations
   async getOrganizations() {
-    const res = await fetch(`${API_BASE}/organizations`)
+    const res = await request(`${API_BASE}/organizations`)
     return res.json()
   },
 
   async getOrganization(id: string) {
-    const res = await fetch(`${API_BASE}/organizations/${id}`)
+    const res = await request(`${API_BASE}/organizations/${id}`)
     return res.json()
   },
 
   async createOrganization(data: { name: string; slug?: string; tier?: string }) {
-    const res = await fetch(`${API_BASE}/organizations`, {
+    const res = await request(`${API_BASE}/organizations`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
@@ -199,12 +220,12 @@ export const api = {
   },
 
   async getOrganizationMembers(orgId: string) {
-    const res = await fetch(`${API_BASE}/organizations/${orgId}/members`)
+    const res = await request(`${API_BASE}/organizations/${orgId}/members`)
     return res.json()
   },
 
   async addOrganizationMember(orgId: string, data: { email: string; role: string }) {
-    const res = await fetch(`${API_BASE}/organizations/${orgId}/members`, {
+    const res = await request(`${API_BASE}/organizations/${orgId}/members`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
@@ -213,14 +234,14 @@ export const api = {
   },
 
   async removeOrganizationMember(orgId: string, memberId: string) {
-    const res = await fetch(`${API_BASE}/organizations/${orgId}/members/${memberId}`, {
+    const res = await request(`${API_BASE}/organizations/${orgId}/members/${memberId}`, {
       method: 'DELETE'
     })
     return res.ok
   },
 
   async updateOrganizationMemberRole(orgId: string, memberId: string, role: string) {
-    const res = await fetch(`${API_BASE}/organizations/${orgId}/members/${memberId}`, {
+    const res = await request(`${API_BASE}/organizations/${orgId}/members/${memberId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ role })

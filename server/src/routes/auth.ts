@@ -55,7 +55,7 @@ router.post('/register', async (req, res) => {
       userId: user.id, 
       organizationId: organization?.id || null,
       role: memberRole || 'member'
-    }, JWT_SECRET, { expiresIn: '7d' })
+    }, JWT_SECRET, { expiresIn: '1h' })
 
     res.json({
       user: { 
@@ -108,7 +108,7 @@ router.post('/login', async (req, res) => {
       userId: user.id, 
       organizationId: orgMember?.id || null,
       role: orgMember?.role || 'member'
-    }, JWT_SECRET, { expiresIn: '7d' })
+    }, JWT_SECRET, { expiresIn: '1h' })
 
     res.json({
       user: { 

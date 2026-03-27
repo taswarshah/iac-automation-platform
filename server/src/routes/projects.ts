@@ -1,11 +1,12 @@
 import { Router } from 'express'
 import { query } from '../config/database.ts'
+import { authenticateToken, AuthRequest } from '../middleware/auth.ts'
 
 const router = Router()
 
-router.get('/', async (req, res) => {
+router.get('/', authenticateToken, async (req: AuthRequest, res) => {
   try {
-    const orgId = req.query.organization_id as string
+    const orgId = (req.query.organization_id as string) || req.user?.organizationId
     
     let sql = 'SELECT * FROM visual_designs WHERE deleted_at IS NULL'
     const params: any[] = []
@@ -25,9 +26,15 @@ router.get('/', async (req, res) => {
   }
 })
 
-router.post('/', async (req, res) => {
+router.post('/', authenticateToken, async (req: AuthRequest, res) => {
   try {
-    const { name, description, iaType, organization_id, created_by } = req.body
+    const { name, description, iaType } = req.body
+    const organization_id = req.user?.organizationId
+    const created_by = req.user?.userId
+
+    if (!organization_id) {
+      return res.status(400).json({ error: 'Organization ID is required' })
+    }
 
     const result = await query(
       `INSERT INTO visual_designs (name, description, ia_type, organization_id, created_by, resources, connections, canvas_state, variables) 
@@ -43,7 +50,7 @@ router.post('/', async (req, res) => {
   }
 })
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', authenticateToken, async (req: AuthRequest, res) => {
   try {
     const result = await query(
       'SELECT * FROM visual_designs WHERE id = $1',
@@ -61,7 +68,7 @@ router.get('/:id', async (req, res) => {
   }
 })
 
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', authenticateToken, async (req: AuthRequest, res) => {
   try {
     const { name, description, nodes, edges } = req.body
 
@@ -103,7 +110,7 @@ router.patch('/:id', async (req, res) => {
   }
 })
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticateToken, async (req: AuthRequest, res) => {
   try {
     await query('DELETE FROM visual_designs WHERE id = $1', [req.params.id])
     res.status(204).send()
@@ -113,7 +120,7 @@ router.delete('/:id', async (req, res) => {
   }
 })
 
-router.get('/:id/graph', async (req, res) => {
+router.get('/:id/graph', authenticateToken, async (req: AuthRequest, res) => {
   try {
     const result = await query(
       'SELECT resources, connections FROM visual_designs WHERE id = $1',
@@ -131,7 +138,7 @@ router.get('/:id/graph', async (req, res) => {
   }
 })
 
-router.post('/:id/graph', async (req, res) => {
+router.post('/:id/graph', authenticateToken, async (req: AuthRequest, res) => {
   try {
     const { nodes, edges, canvas_state, variables } = req.body
 
@@ -153,7 +160,7 @@ router.post('/:id/graph', async (req, res) => {
   }
 })
 
-router.post('/:id/save', async (req, res) => {
+router.post('/:id/save', authenticateToken, async (req: AuthRequest, res) => {
   try {
     const { 
       name, 
@@ -165,11 +172,11 @@ router.post('/:id/save', async (req, res) => {
       status,
       environment,
       tags,
-      ia_type,
-      created_by 
+      ia_type
     } = req.body
 
     const { id } = req.params
+    const created_by = req.user?.userId
 
     const updates: string[] = []
     const params: any[] = []
@@ -246,7 +253,7 @@ router.post('/:id/save', async (req, res) => {
   }
 })
 
-router.get('/:id/full', async (req, res) => {
+router.get('/:id/full', authenticateToken, async (req: AuthRequest, res) => {
   try {
     const { id } = req.params
 

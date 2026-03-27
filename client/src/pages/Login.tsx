@@ -1,15 +1,33 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { PenTool, Mail, Lock, ArrowRight, Sparkles } from 'lucide-react'
 import { useAppStore } from '@/stores'
 
 export default function Login() {
   const navigate = useNavigate()
-  const { login } = useAppStore()
+  const { login, isAuthenticated } = useAppStore()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [rememberMe, setRememberMe] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [_error, setError] = useState('')
+
+  useEffect(() => {
+    const token = localStorage.getItem('token')
+    if (isAuthenticated || token) {
+      navigate('/dashboard')
+    }
+  }, [isAuthenticated, navigate])
+
+  useEffect(() => {
+    const savedEmail = localStorage.getItem('remember_email')
+    const savedPassword = localStorage.getItem('remember_password')
+    if (savedEmail && savedPassword) {
+      setEmail(savedEmail)
+      setPassword(savedPassword)
+      setRememberMe(true)
+    }
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -29,6 +47,14 @@ export default function Login() {
         setError(data.error || 'Login failed')
         setIsLoading(false)
         return
+      }
+
+      if (rememberMe) {
+        localStorage.setItem('remember_email', email)
+        localStorage.setItem('remember_password', password)
+      } else {
+        localStorage.removeItem('remember_email')
+        localStorage.removeItem('remember_password')
       }
       
       login({
@@ -167,6 +193,8 @@ export default function Login() {
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
                     className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-primary focus:ring-primary/50"
                   />
                   <span className="text-sm text-slate-400">Remember me</span>
