@@ -1,17 +1,14 @@
 -- =====================================================
 -- IaC AUTOMATION PLATFORM
--- Enterprise Azure SQL Database Schema
+-- Enterprise Azure SQL Database
 -- =====================================================
 
--- =====================================================
--- 1. MULTI-TENANCY & ORGS
--- =====================================================
-
+-- 1. MULTI-TENANCY
 CREATE TABLE organizations (
     organization_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
     name NVARCHAR(255) NOT NULL,
     slug NVARCHAR(100) UNIQUE NOT NULL,
-    tier NVARCHAR(50) NOT NULL DEFAULT 'free' CHECK (tier IN ('enterprise', 'pro', 'team', 'free')),
+    tier NVARCHAR(50) NOT NULL DEFAULT 'free',
     settings NVARCHAR(MAX) DEFAULT '{}',
     created_at DATETIME2 DEFAULT GETDATE(),
     updated_at DATETIME2 DEFAULT GETDATE()
@@ -23,7 +20,6 @@ CREATE TABLE users (
     username NVARCHAR(100) UNIQUE NOT NULL,
     full_name NVARCHAR(255),
     password_hash NVARCHAR(255),
-    avatar_url NVARCHAR(MAX),
     auth_provider NVARCHAR(50) DEFAULT 'local',
     settings NVARCHAR(MAX) DEFAULT '{"notifications": true, "theme": "light"}',
     is_active BIT DEFAULT 1,
@@ -37,7 +33,6 @@ CREATE TABLE teams (
     organization_id UNIQUEIDENTIFIER NOT NULL,
     name NVARCHAR(255) NOT NULL,
     description NVARCHAR(MAX),
-    settings NVARCHAR(MAX) DEFAULT '{}',
     created_at DATETIME2 DEFAULT GETDATE(),
     updated_at DATETIME2 DEFAULT GETDATE(),
     CONSTRAINT UQ_teams_org_name UNIQUE (organization_id, name)
@@ -47,8 +42,7 @@ CREATE TABLE organization_members (
     member_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
     organization_id UNIQUEIDENTIFIER NOT NULL,
     user_id UNIQUEIDENTIFIER NOT NULL,
-    role NVARCHAR(50) NOT NULL DEFAULT 'member' CHECK (role IN ('owner', 'admin', 'member', 'viewer')),
-    permissions NVARCHAR(MAX) DEFAULT '[]',
+    role NVARCHAR(50) NOT NULL DEFAULT 'member',
     joined_at DATETIME2 DEFAULT GETDATE(),
     created_at DATETIME2 DEFAULT GETDATE(),
     CONSTRAINT UQ_org_members UNIQUE (organization_id, user_id)
@@ -58,27 +52,21 @@ CREATE TABLE team_members (
     team_member_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
     team_id UNIQUEIDENTIFIER NOT NULL,
     user_id UNIQUEIDENTIFIER NOT NULL,
-    role NVARCHAR(50) NOT NULL DEFAULT 'member' CHECK (role IN ('lead', 'member')),
+    role NVARCHAR(50) NOT NULL DEFAULT 'member',
     created_at DATETIME2 DEFAULT GETDATE(),
     CONSTRAINT UQ_team_members UNIQUE (team_id, user_id)
 );
 
--- =====================================================
 -- 2. CLOUD CREDENTIALS
--- =====================================================
-
 CREATE TABLE cloud_credentials (
     credential_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
     organization_id UNIQUEIDENTIFIER NOT NULL,
     name NVARCHAR(255) NOT NULL,
-    provider NVARCHAR(50) NOT NULL CHECK (provider IN ('aws', 'azure', 'gcp', 'kubernetes')),
+    provider NVARCHAR(50) NOT NULL,
     credentials_encrypted NVARCHAR(MAX) NOT NULL,
     credentials_hash NVARCHAR(64),
     regions NVARCHAR(MAX) DEFAULT '[]',
     is_active BIT DEFAULT 1,
-    last_used_at DATETIME2,
-    expires_at DATETIME2,
-    created_by UNIQUEIDENTIFIER,
     created_at DATETIME2 DEFAULT GETDATE(),
     updated_at DATETIME2 DEFAULT GETDATE(),
     CONSTRAINT UQ_credentials_org_name UNIQUE (organization_id, name)
@@ -99,19 +87,15 @@ CREATE TABLE discovered_resources (
     CONSTRAINT UQ_discovered_resources UNIQUE (credential_id, resource_id)
 );
 
--- =====================================================
 -- 3. TEMPLATES
--- =====================================================
-
 CREATE TABLE templates (
     template_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
     organization_id UNIQUEIDENTIFIER,
-    team_id UNIQUEIDENTIFIER,
     name NVARCHAR(255) NOT NULL,
     slug NVARCHAR(255),
     description NVARCHAR(MAX),
     category NVARCHAR(100),
-    provider NVARCHAR(50) CHECK (provider IN ('aws', 'azure', 'gcp', 'kubernetes', 'multi')),
+    provider NVARCHAR(50),
     version NVARCHAR(50) NOT NULL DEFAULT '1.0.0',
     is_public BIT DEFAULT 0,
     is_official BIT DEFAULT 0,
@@ -123,13 +107,11 @@ CREATE TABLE templates (
     outputs NVARCHAR(MAX) DEFAULT '[]',
     tags NVARCHAR(MAX) DEFAULT '[]',
     icon_url NVARCHAR(MAX),
-    documentation NVARCHAR(MAX),
     rating DECIMAL(3,2) DEFAULT 0,
     rating_count INT DEFAULT 0,
     created_by UNIQUEIDENTIFIER,
     created_at DATETIME2 DEFAULT GETDATE(),
-    updated_at DATETIME2 DEFAULT GETDATE(),
-    CONSTRAINT UQ_templates_org_slug UNIQUE (organization_id, slug)
+    updated_at DATETIME2 DEFAULT GETDATE()
 );
 
 CREATE TABLE template_versions (
@@ -143,18 +125,15 @@ CREATE TABLE template_versions (
     CONSTRAINT UQ_template_version UNIQUE (template_id, version)
 );
 
--- =====================================================
--- 4. VISUAL DESIGNS (PROJECTS)
--- =====================================================
-
+-- 4. VISUAL DESIGNS
 CREATE TABLE visual_designs (
     design_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
     organization_id UNIQUEIDENTIFIER NOT NULL,
     team_id UNIQUEIDENTIFIER,
     name NVARCHAR(255) NOT NULL,
     description NVARCHAR(MAX),
-    ia_type NVARCHAR(50) NOT NULL CHECK (ia_type IN ('terraform', 'kubernetes', 'azure')),
-    environment NVARCHAR(50) DEFAULT 'development' CHECK (environment IN ('development', 'staging', 'production')),
+    ia_type NVARCHAR(50) NOT NULL,
+    environment NVARCHAR(50) DEFAULT 'development',
     version INT DEFAULT 1,
     canvas_state NVARCHAR(MAX) DEFAULT '{}',
     resources NVARCHAR(MAX) DEFAULT '[]',
@@ -165,7 +144,8 @@ CREATE TABLE visual_designs (
     locked_by UNIQUEIDENTIFIER,
     locked_at DATETIME2,
     tags NVARCHAR(MAX) DEFAULT '[]',
-    status NVARCHAR(50) DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'archived', 'locked')),
+    metadata NVARCHAR(MAX) DEFAULT '{}',
+    status NVARCHAR(50) DEFAULT 'draft',
     created_by UNIQUEIDENTIFIER,
     created_at DATETIME2 DEFAULT GETDATE(),
     updated_by UNIQUEIDENTIFIER,
@@ -188,36 +168,30 @@ CREATE TABLE design_members (
     design_member_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
     design_id UNIQUEIDENTIFIER NOT NULL,
     user_id UNIQUEIDENTIFIER NOT NULL,
-    role NVARCHAR(50) DEFAULT 'editor' CHECK (role IN ('owner', 'editor', 'viewer')),
+    role NVARCHAR(50) DEFAULT 'editor',
     granted_by UNIQUEIDENTIFIER,
     granted_at DATETIME2 DEFAULT GETDATE(),
     CONSTRAINT UQ_design_member UNIQUE (design_id, user_id)
 );
 
--- =====================================================
 -- 5. CODE GENERATION
--- =====================================================
-
 CREATE TABLE generated_code (
     generated_code_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
     design_id UNIQUEIDENTIFIER NOT NULL,
     version INT NOT NULL,
-    framework NVARCHAR(50) NOT NULL CHECK (framework IN ('terraform', 'cloudformation', 'pulumi', 'kubernetes')),
+    framework NVARCHAR(50) NOT NULL,
     provider NVARCHAR(50),
     code_content NVARCHAR(MAX) NOT NULL,
     code_hash NVARCHAR(64) NOT NULL,
     variables NVARCHAR(MAX) DEFAULT '{}',
     outputs NVARCHAR(MAX) DEFAULT '{}',
-    validation_status NVARCHAR(50) DEFAULT 'pending' CHECK (validation_status IN ('pending', 'valid', 'invalid')),
+    validation_status NVARCHAR(50) DEFAULT 'pending',
     validation_errors NVARCHAR(MAX),
     created_by UNIQUEIDENTIFIER,
     created_at DATETIME2 DEFAULT GETDATE()
 );
 
--- =====================================================
 -- 6. DEPLOYMENTS
--- =====================================================
-
 CREATE TABLE deployments (
     deployment_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
     organization_id UNIQUEIDENTIFIER NOT NULL,
@@ -225,8 +199,8 @@ CREATE TABLE deployments (
     generated_code_id UNIQUEIDENTIFIER,
     credential_id UNIQUEIDENTIFIER,
     name NVARCHAR(255) NOT NULL,
-    status NVARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'planning', 'approved', 'applying', 'completed', 'cancelled')),
-    deployment_type NVARCHAR(50) NOT NULL CHECK (deployment_type IN ('plan', 'apply', 'destroy', 'refresh')),
+    status NVARCHAR(50) DEFAULT 'pending',
+    deployment_type NVARCHAR(50) NOT NULL,
     plan_output NVARCHAR(MAX),
     plan_summary NVARCHAR(MAX) DEFAULT '{}',
     variables NVARCHAR(MAX) DEFAULT '{}',
@@ -245,7 +219,7 @@ CREATE TABLE deployment_steps (
     step_order INT NOT NULL,
     resource_type NVARCHAR(255),
     resource_address NVARCHAR(512),
-    action NVARCHAR(50) CHECK (action IN ('create', 'update', 'delete', 'read')),
+    action NVARCHAR(50),
     status NVARCHAR(50) NOT NULL,
     status_message NVARCHAR(MAX),
     duration_ms INT,
@@ -260,7 +234,7 @@ CREATE TABLE deployment_approvals (
     deployment_id UNIQUEIDENTIFIER NOT NULL,
     approver_user_id UNIQUEIDENTIFIER,
     approver_role NVARCHAR(50),
-    status NVARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+    status NVARCHAR(50) DEFAULT 'pending',
     comments NVARCHAR(MAX),
     approval_token NVARCHAR(255),
     expires_at DATETIME2,
@@ -269,17 +243,14 @@ CREATE TABLE deployment_approvals (
     updated_at DATETIME2 DEFAULT GETDATE()
 );
 
--- =====================================================
--- 7. POLICY-AS-CODE
--- =====================================================
-
+-- 7. POLICIES
 CREATE TABLE policies (
     policy_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
     organization_id UNIQUEIDENTIFIER,
     name NVARCHAR(255) NOT NULL,
     description NVARCHAR(MAX),
-    policy_type NVARCHAR(50) NOT NULL CHECK (policy_type IN ('security', 'cost', 'compliance', 'operational')),
-    severity NVARCHAR(50) NOT NULL CHECK (severity IN ('critical', 'high', 'medium', 'low', 'info')),
+    policy_type NVARCHAR(50) NOT NULL,
+    severity NVARCHAR(50) NOT NULL,
     framework NVARCHAR(100),
     provider NVARCHAR(50),
     resource_types NVARCHAR(MAX) DEFAULT '[]',
@@ -291,8 +262,7 @@ CREATE TABLE policies (
     is_custom BIT DEFAULT 0,
     created_by UNIQUEIDENTIFIER,
     created_at DATETIME2 DEFAULT GETDATE(),
-    updated_at DATETIME2 DEFAULT GETDATE(),
-    CONSTRAINT UQ_policies_org_name UNIQUE (organization_id, name)
+    updated_at DATETIME2 DEFAULT GETDATE()
 );
 
 CREATE TABLE policy_violations (
@@ -305,7 +275,7 @@ CREATE TABLE policy_violations (
     resource_type NVARCHAR(255),
     violation_message NVARCHAR(MAX) NOT NULL,
     severity NVARCHAR(50) NOT NULL,
-    status NVARCHAR(50) DEFAULT 'open' CHECK (status IN ('open', 'acknowledged', 'resolved', 'false_positive')),
+    status NVARCHAR(50) DEFAULT 'open',
     metadata NVARCHAR(MAX) DEFAULT '{}',
     detected_at DATETIME2 DEFAULT GETDATE(),
     resolved_at DATETIME2,
@@ -313,17 +283,14 @@ CREATE TABLE policy_violations (
     created_at DATETIME2 DEFAULT GETDATE()
 );
 
--- =====================================================
 -- 8. DRIFT DETECTION
--- =====================================================
-
 CREATE TABLE drift_detection_runs (
     run_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
     organization_id UNIQUEIDENTIFIER NOT NULL,
     deployment_id UNIQUEIDENTIFIER,
     design_id UNIQUEIDENTIFIER,
     credential_id UNIQUEIDENTIFIER,
-    status NVARCHAR(50) NOT NULL CHECK (status IN ('running', 'completed', 'failed')),
+    status NVARCHAR(50) NOT NULL,
     resources_scanned INT DEFAULT 0,
     drifts_found INT DEFAULT 0,
     started_at DATETIME2 DEFAULT GETDATE(),
@@ -341,23 +308,20 @@ CREATE TABLE drifts (
     expected_state NVARCHAR(MAX) NOT NULL,
     actual_state NVARCHAR(MAX) NOT NULL,
     diff NVARCHAR(MAX) NOT NULL,
-    drift_type NVARCHAR(50) NOT NULL CHECK (drift_type IN ('missing', 'changed', 'extra')),
-    severity NVARCHAR(50) NOT NULL CHECK (severity IN ('low', 'medium', 'high', 'critical')),
-    status NVARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'resolved', 'ignored')),
+    drift_type NVARCHAR(50) NOT NULL,
+    severity NVARCHAR(50) NOT NULL,
+    status NVARCHAR(50) DEFAULT 'active',
     detected_at DATETIME2 DEFAULT GETDATE(),
     resolved_at DATETIME2,
     resolved_by UNIQUEIDENTIFIER
 );
 
--- =====================================================
 -- 9. CI/CD
--- =====================================================
-
 CREATE TABLE cicd_integrations (
     integration_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
     organization_id UNIQUEIDENTIFIER NOT NULL,
     name NVARCHAR(255) NOT NULL,
-    provider NVARCHAR(50) NOT NULL CHECK (provider IN ('github_actions', 'gitlab_ci', 'jenkins', 'circleci')),
+    provider NVARCHAR(50) NOT NULL,
     repository_url NVARCHAR(MAX),
     repository_name NVARCHAR(255),
     branch_patterns NVARCHAR(MAX) DEFAULT '["main", "master"]',
@@ -367,8 +331,7 @@ CREATE TABLE cicd_integrations (
     is_active BIT DEFAULT 1,
     last_sync_at DATETIME2,
     created_at DATETIME2 DEFAULT GETDATE(),
-    updated_at DATETIME2 DEFAULT GETDATE(),
-    CONSTRAINT UQ_cicd_org_name UNIQUE (organization_id, name)
+    updated_at DATETIME2 DEFAULT GETDATE()
 );
 
 CREATE TABLE cicd_pipelines (
@@ -387,10 +350,7 @@ CREATE TABLE cicd_pipelines (
     updated_at DATETIME2 DEFAULT GETDATE()
 );
 
--- =====================================================
 -- 10. COLLABORATION
--- =====================================================
-
 CREATE TABLE comments (
     comment_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
     organization_id UNIQUEIDENTIFIER NOT NULL,
@@ -412,7 +372,7 @@ CREATE TABLE change_requests (
     title NVARCHAR(255) NOT NULL,
     description NVARCHAR(MAX),
     changes NVARCHAR(MAX) NOT NULL,
-    status NVARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'cancelled')),
+    status NVARCHAR(50) DEFAULT 'pending',
     approved_by UNIQUEIDENTIFIER,
     approved_at DATETIME2,
     rejection_reason NVARCHAR(MAX),
@@ -423,7 +383,7 @@ CREATE TABLE change_requests (
 CREATE TABLE notifications (
     notification_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
     user_id UNIQUEIDENTIFIER NOT NULL,
-    type NVARCHAR(50) NOT NULL CHECK (type IN ('deployment_complete', 'drift_detected', 'policy_violation', 'comment', 'approval_required')),
+    type NVARCHAR(50) NOT NULL,
     title NVARCHAR(255) NOT NULL,
     content NVARCHAR(MAX),
     data NVARCHAR(MAX) DEFAULT '{}',
@@ -432,15 +392,12 @@ CREATE TABLE notifications (
     created_at DATETIME2 DEFAULT GETDATE()
 );
 
--- =====================================================
--- 11. AUDIT & OBSERVABILITY
--- =====================================================
-
+-- 11. AUDIT
 CREATE TABLE audit_logs (
     audit_log_id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
     organization_id UNIQUEIDENTIFIER,
     user_id UNIQUEIDENTIFIER,
-    actor_type NVARCHAR(50) NOT NULL CHECK (actor_type IN ('user', 'system', 'api_key')),
+    actor_type NVARCHAR(50) NOT NULL,
     actor_id NVARCHAR(255),
     action NVARCHAR(100) NOT NULL,
     resource_type NVARCHAR(100) NOT NULL,
@@ -482,10 +439,7 @@ CREATE TABLE webhooks (
     updated_at DATETIME2 DEFAULT GETDATE()
 );
 
--- =====================================================
--- INDEXES FOR PERFORMANCE
--- =====================================================
-
+-- INDEXES
 CREATE INDEX IX_org_members_org ON organization_members(organization_id);
 CREATE INDEX IX_org_members_user ON organization_members(user_id);
 CREATE INDEX IX_team_members_team ON team_members(team_id);
@@ -493,14 +447,11 @@ CREATE INDEX IX_team_members_user ON team_members(user_id);
 CREATE INDEX IX_creds_provider ON cloud_credentials(provider);
 CREATE INDEX IX_creds_active ON cloud_credentials(is_active);
 CREATE INDEX IX_discovered_type ON discovered_resources(resource_type);
-CREATE INDEX IX_discovered_region ON discovered_resources(region);
 CREATE INDEX IX_templates_org ON templates(organization_id);
 CREATE INDEX IX_templates_public ON templates(is_public);
 CREATE INDEX IX_templates_category ON templates(category);
-CREATE INDEX IX_templates_provider ON templates(provider);
 CREATE INDEX IX_designs_org ON visual_designs(organization_id);
 CREATE INDEX IX_designs_status ON visual_designs(status);
-CREATE INDEX IX_designs_created ON visual_designs(created_at);
 CREATE INDEX IX_deployments_org ON deployments(organization_id);
 CREATE INDEX IX_deployments_status ON deployments(status);
 CREATE INDEX IX_deployments_design ON deployments(design_id);
@@ -510,14 +461,71 @@ CREATE INDEX IX_policies_enabled ON policies(enabled);
 CREATE INDEX IX_violations_org ON policy_violations(organization_id, status);
 CREATE INDEX IX_violations_policy ON policy_violations(policy_id);
 CREATE INDEX IX_drifts_run ON drifts(run_id);
-CREATE INDEX IX_drifts_status ON drifts(status);
 CREATE INDEX IX_cicd_org ON cicd_integrations(organization_id);
-CREATE INDEX IX_cicd_pipelines_org ON cicd_pipelines(organization_id);
 CREATE INDEX IX_comments_design ON comments(design_id);
 CREATE INDEX IX_change_requests_design ON change_requests(design_id);
-CREATE INDEX IX_change_requests_status ON change_requests(status);
 CREATE INDEX IX_notifications_user ON notifications(user_id, is_read, created_at);
 CREATE INDEX IX_audit_org ON audit_logs(organization_id, created_at);
 CREATE INDEX IX_audit_user ON audit_logs(user_id);
+GO
 
-PRINT 'Enterprise database schema created successfully!';
+PRINT 'Tables and indexes created successfully!';
+GO
+
+-- SEED DATA (Skip if already exists)
+IF NOT EXISTS (SELECT 1 FROM organizations WHERE slug = 'iac-platform')
+BEGIN
+    INSERT INTO organizations (name, slug, tier, settings) 
+    VALUES ('IaC Platform Inc.', 'iac-platform', 'enterprise', '{"allow_public_templates": true}');
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM users WHERE email = 'admin@iacplatform.com')
+BEGIN
+    INSERT INTO users (email, username, full_name, password_hash, auth_provider, is_active)
+    VALUES ('admin@iacplatform.com', 'admin', 'System Admin', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZRGdjGj/N3fraJG8hKpX.uB3C8YQHW', 'local', 1);
+END
+GO
+
+DECLARE @OrgId UNIQUEIDENTIFIER, @UserId UNIQUEIDENTIFIER;
+SELECT @OrgId = organization_id FROM organizations WHERE slug = 'iac-platform';
+SELECT @UserId = user_id FROM users WHERE email = 'admin@iacplatform.com';
+
+IF @OrgId IS NOT NULL AND @UserId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM organization_members WHERE organization_id = @OrgId AND user_id = @UserId)
+BEGIN
+    INSERT INTO organization_members (organization_id, user_id, role)
+    VALUES (@OrgId, @UserId, 'owner');
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM policies WHERE name = 'S3 Bucket Encryption')
+BEGIN
+    INSERT INTO policies (name, description, policy_type, severity, provider, enabled) VALUES
+    ('S3 Bucket Encryption', 'S3 buckets must have server-side encryption enabled', 'security', 'critical', 'aws', 1),
+    ('RDS Backup Retention', 'RDS instances should have backup retention enabled', 'compliance', 'high', 'aws', 1),
+    ('Security Group Open Port', 'Security groups should not allow unrestricted access', 'security', 'high', 'aws', 1),
+    ('Lambda Timeout', 'Lambda functions should have reasonable timeout values', 'operational', 'low', 'aws', 1),
+    ('Kubernetes Root Container', 'Kubernetes pods should not run as root', 'security', 'high', 'kubernetes', 1),
+    ('IAM Password Policy', 'IAM users must have strong password policy', 'compliance', 'critical', 'aws', 1),
+    ('VPC Flow Logs', 'VPC should have flow logs enabled', 'operational', 'medium', 'aws', 1),
+    ('Azure Storage Encryption', 'Azure storage accounts must have encryption enabled', 'security', 'critical', 'azure', 1),
+    ('GCP Firewall Rules', 'GCP firewall rules should not allow unrestricted ingress', 'security', 'high', 'gcp', 1);
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM templates WHERE slug = 'web-app-stack')
+BEGIN
+    INSERT INTO templates (name, slug, description, category, provider, is_public, is_featured, usage_count) VALUES
+    ('Web Application Stack', 'web-app-stack', 'Complete web app with load balancer and database', 'web-app', 'aws', 1, 1, 1250),
+    ('Kubernetes Cluster', 'k8s-cluster', 'Production-ready K8s cluster', 'container', 'kubernetes', 1, 1, 890),
+    ('Serverless API', 'serverless-api', 'API Gateway with Lambda', 'serverless', 'aws', 1, 0, 720),
+    ('Azure VM Scale Set', 'azure-vmss', 'Azure virtual machine scale set', 'azure', 'azure', 1, 0, 340),
+    ('Microservices on EKS', 'eks-microservices', 'EKS cluster with microservices', 'container', 'kubernetes', 1, 0, 560),
+    ('Multi-Tier VPC', 'multi-tier-vpc', 'VPC with public/private subnets', 'network', 'aws', 1, 0, 680),
+    ('Data Lake Architecture', 'data-lake', 'S3 data lake with analytics', 'data', 'aws', 1, 0, 290),
+    ('Azure Kubernetes Service', 'aks-cluster', 'Azure Kubernetes Service', 'container', 'azure', 1, 0, 410);
+END
+GO
+
+PRINT 'Database initialized!';
+GO

@@ -14,7 +14,8 @@
     "build": "npm run build --workspace=client",
     "start": "npm run start --workspace=server",
     "lint": "npm run lint --workspaces",
-    "test": "npm run test --workspaces"
+    "test": "npm run test --workspaces",
+    "init-db": "tsx scripts/init-db.ts"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
