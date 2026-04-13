@@ -1,4 +1,4 @@
-# IAC Automation Platform
+# IaC Automation Platform
 
 Visual Infrastructure-as-Code Automation Platform for designing, generating, and deploying cloud infrastructure.
 
@@ -6,21 +6,25 @@ Visual Infrastructure-as-Code Automation Platform for designing, generating, and
 
 - Node.js v20+ (v22 recommended)
 - npm or yarn
-- PostgreSQL database
-- Supabase account (optional, for cloud storage)
+- Azure SQL Database (or SQL Server)
+- Supabase account (optional, for auth)
 
 ## Tech Stack
 
-- **Frontend**: React, Vite, TypeScript, TailwindCSS, React Flow
-- **Backend**: Express, TypeScript, PostgreSQL, Prisma
-- **Infrastructure**: AWS SDK, Terraform generation
+| Layer | Technology |
+|-------|------------|
+| Frontend | React, Vite, TypeScript, TailwindCSS, React Flow |
+| Backend | Express, TypeScript, Azure SQL |
+| Database | Azure SQL Database (mssql driver) |
+| Auth | JWT + bcrypt |
+| Code Gen | Custom Terraform/Kubernetes generators |
 
 ## Getting Started
 
 ### 1. Clone the repository
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/taswarshah/iac-automation-platform.git
 cd iac-automation-platform
 ```
 
@@ -30,48 +34,42 @@ cd iac-automation-platform
 npm install
 ```
 
-Or if you encounter issues with npm, use yarn:
-
-```bash
-rm -rf node_modules package-lock.json
-yarn install
-```
-
 ### 3. Environment Setup
 
-Copy the example environment file for the server:
-
-```bash
-cp server/.env.example server/.env
-```
-
-Update `server/.env` with your database credentials:
+The `.env` file is already configured with Azure SQL. Update if needed:
 
 ```env
-DATABASE_URL=postgresql://user:password@localhost:5432/iac_db
-JWT_SECRET=your-secret-key-change-in-production
-SUPABASE_URL=your-supabase-url
-SUPABASE_ANON_KEY=your-supabase-anon-key
+# Server
 PORT=3001
+
+# JWT
+JWT_SECRET=your-secret-key-change-in-production
+
+# Azure SQL Database
+DB_SERVER=iac-dev.database.windows.net
+DB_NAME=iac
+DB_USER=iac
+DB_PASSWORD=your-password
+DB_PORT=1433
+
+# Supabase (optional)
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key
 ```
 
 ### 4. Database Setup
 
-Run the SQL schema to create tables:
+#### Option A: Run SQL Script (Recommended)
 
-```bash
-psql -U postgres -d iac_db -f server/supabase-setup.sql
-```
+1. Open Azure Data Studio or SSMS
+2. Connect to: `iac-dev.database.windows.net,1433`
+3. Run `database/database.sql`
 
-Or use Prisma to push the schema:
+#### Option B: Reset Existing Database
 
-```bash
-cd server && npx prisma db push
-```
+If tables already exist, run `database/reset.sql` first, then `database/database.sql`.
 
 ### 5. Run the Project
-
-From the root directory:
 
 ```bash
 npm run dev
@@ -81,7 +79,7 @@ This starts:
 - **Client**: http://localhost:5173
 - **Server**: http://localhost:3001
 
-### Alternative: Run separately
+### Run separately
 
 **Terminal 1 - Client:**
 ```bash
@@ -93,63 +91,102 @@ cd client && npm run dev
 cd server && npm run dev
 ```
 
-## Common Issues
+## Database Schema
 
-### Node.js version issues
-If you encounter `Invalid Version` errors, use Node.js v20 or v22:
+The platform uses Azure SQL with 30 enterprise-level tables:
 
-```bash
-nvm use 20
-```
+| Category | Tables |
+|----------|--------|
+| Multi-Tenancy | organizations, users, teams, organization_members, team_members |
+| Cloud Credentials | cloud_credentials, discovered_resources |
+| Templates | templates, template_versions |
+| Visual Designs | visual_designs, design_versions, design_members |
+| Code Generation | generated_code |
+| Deployments | deployments, deployment_steps, deployment_approvals |
+| Policies | policies, policy_violations |
+| Drift Detection | drift_detection_runs, drifts |
+| CI/CD | cicd_integrations, cicd_pipelines |
+| Collaboration | comments, change_requests, notifications |
+| Audit | audit_logs, api_keys, webhooks |
 
-### tsx not found
-If you get "tsx: not found" error, the project is configured to use Node's built-in loader:
+## Azure SQL Connection
 
-```bash
-node --import tsx src/index.ts
-```
+```powershell
+# Using sqlcmd
+sqlcmd -S iac-dev.database.windows.net,1433 -d iac -U iac -P "your-password" -i database/database.sql
 
-### npm install fails
-Try using yarn instead:
-
-```bash
-rm -rf node_modules package-lock.json
-yarn install
+# Using Azure Data Studio
+Server: iac-dev.database.windows.net,1433
+Database: iac
+Authentication: Active Directory or SQL Login
 ```
 
 ## Project Structure
 
 ```
-├── client/              # React frontend
+├── client/                  # React frontend
 │   ├── src/
-│   │   ├── components/  # React components
-│   │   ├── pages/       # Page components
-│   │   ├── hooks/       # Custom hooks
-│   │   └── stores/      # Zustand stores
+│   │   ├── components/   # UI components
+│   │   ├── pages/        # Page components
+│   │   ├── stores/      # Zustand state
+│   │   ├── types/       # TypeScript types
+│   │   └── utils/      # API & code generators
 │   └── package.json
 │
-├── server/              # Express backend
+├── server/                # Express backend
 │   ├── src/
 │   │   ├── routes/      # API routes
 │   │   ├── config/     # Database config
-│   │   └── index.ts     # Entry point
-│   ├── prisma/         # Prisma schema
+│   │   └── index.ts   # Entry point
 │   └── package.json
 │
-├── microservices/       # Microservices (future)
+├── database/              # SQL schemas
+│   ├── database.sql     # Complete schema
+│   ├── reset.sql       # Drop all tables
+│   └── schema.sql     # Original PostgreSQL
 │
-└── package.json        # Root workspace config
+├── microservices/         # Microservices (future)
+│   └── ...
+│
+└── package.json         # Root workspace
 ```
 
 ## API Endpoints
 
+### Authentication
 - `POST /api/auth/register` - Register user
 - `POST /api/auth/login` - Login user
+- `GET /api/auth/me` - Get current user
+
+### Organizations
+- `GET /api/organizations` - List organizations
+- `POST /api/organizations` - Create organization
+
+### Projects/Designs
 - `GET /api/projects` - List projects
 - `POST /api/projects` - Create project
+- `GET /api/projects/:id/full` - Get full project
+- `POST /api/projects/:id/save` - Save design
+
+### Templates
 - `GET /api/templates` - List templates
-- `POST /api/generate` - Generate Terraform
-- `POST /api/provision` - Deploy infrastructure
+
+### Code Generation
+- `POST /api/generate/terraform` - Generate Terraform
+- `POST /api/generate/kubernetes` - Generate Kubernetes
+
+### Provisioning
+- `POST /api/provision/provision` - Deploy resources
+- `POST /api/provision/destroy` - Destroy resources
+
+### Policy
+- `POST /api/policy/check` - Check policies
+
+## Default Credentials
+
+After running the database seed:
+- **Email**: admin@iacplatform.com
+- **Password**: admin123
 
 ## License
 
