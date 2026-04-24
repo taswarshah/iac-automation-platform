@@ -19,6 +19,37 @@ variable "resource_group_name" {
   default = "iac-platform-dev-rg"
 }
 
+variable "db_server" {
+  type    = string
+  default = "iac-dev.database.windows.net"
+}
+
+variable "db_name" {
+  type    = string
+  default = "iac"
+}
+
+variable "db_user" {
+  type      = string
+  default   = "iac"
+  sensitive = true
+}
+
+variable "db_password" {
+  type      = string
+  sensitive = true
+}
+
+variable "db_port" {
+  type    = string
+  default = "1433"
+}
+
+variable "jwt_secret" {
+  type      = string
+  sensitive = true
+}
+
 # Resource Group
 resource "azurerm_resource_group" "rg" {
   name     = var.resource_group_name
@@ -51,29 +82,17 @@ resource "azurerm_container_app_environment" "env" {
   log_analytics_workspace_id = azurerm_log_analytics_workspace.law.id
 }
 
-# PostgreSQL Flexible Server (Smallest tier for dev)
-resource "azurerm_postgresql_flexible_server" "db" {
-  name                   = "iac-platform-db-dev"
-  resource_group_name    = azurerm_resource_group.rg.name
-  location               = azurerm_resource_group.rg.location
-  version                = "13"
-  administrator_login    = "iacadmin"
-  administrator_password = "ComplexPassword123!"
-  storage_mb             = 32768
-  sku_name               = "B_Standard_B1ms" # Smallest available
-}
-
 # Define each service and its port
 locals {
   services = {
-    "api-gateway"         = 3000
-    "auth-service"        = 3001
-    "project-service"     = 3002
-    "template-service"    = 3003
-    "code-gen-service"    = 3004
-    "policy-service"      = 3005
-    "deployment-service"  = 3006
-    "drift-service"       = 3007
+    "api-gateway"          = 3000
+    "auth-service"         = 3001
+    "project-service"      = 3002
+    "template-service"     = 3003
+    "code-gen-service"     = 3004
+    "policy-service"       = 3005
+    "deployment-service"   = 3006
+    "drift-service"        = 3007
     "notification-service" = 3008
   }
 }
@@ -93,18 +112,98 @@ resource "azurerm_container_app" "services" {
       image  = "${azurerm_container_registry.acr.login_server}/iac-${each.key}:latest"
       cpu    = 0.25
       memory = "0.5Gi"
-      
+
       env {
         name  = "PORT"
         value = tostring(each.value)
       }
       env {
-        name  = "DATABASE_URL"
-        value = "postgresql://iacadmin:ComplexPassword123!@${azurerm_postgresql_flexible_server.db.fqdn}:5432/postgres"
+        name        = "JWT_SECRET"
+        secret_name = "jwt-secret"
+      }
+      env {
+        name  = "CORS_ORIGIN"
+        value = "*"
+      }
+      env {
+        name  = "DB_SERVER"
+        value = var.db_server
+      }
+      env {
+        name  = "DB_NAME"
+        value = var.db_name
+      }
+      env {
+        name        = "DB_USER"
+        secret_name = "db-user"
+      }
+      env {
+        name        = "DB_PASSWORD"
+        secret_name = "db-password"
+      }
+      env {
+        name  = "DB_PORT"
+        value = var.db_port
+      }
+
+      dynamic "env" {
+        for_each = each.key == "api-gateway" ? [1] : []
+        content {
+          name  = "AUTH_SERVICE_URL"
+          value = "https://iac-auth-service.internal.${azurerm_container_app_environment.env.default_domain}"
+        }
+      }
+      dynamic "env" {
+        for_each = each.key == "api-gateway" ? [1] : []
+        content {
+          name  = "PROJECT_SERVICE_URL"
+          value = "https://iac-project-service.internal.${azurerm_container_app_environment.env.default_domain}"
+        }
+      }
+      dynamic "env" {
+        for_each = each.key == "api-gateway" ? [1] : []
+        content {
+          name  = "TEMPLATE_SERVICE_URL"
+          value = "https://iac-template-service.internal.${azurerm_container_app_environment.env.default_domain}"
+        }
+      }
+      dynamic "env" {
+        for_each = each.key == "api-gateway" ? [1] : []
+        content {
+          name  = "CODE_GEN_SERVICE_URL"
+          value = "https://iac-code-gen-service.internal.${azurerm_container_app_environment.env.default_domain}"
+        }
+      }
+      dynamic "env" {
+        for_each = each.key == "api-gateway" ? [1] : []
+        content {
+          name  = "POLICY_SERVICE_URL"
+          value = "https://iac-policy-service.internal.${azurerm_container_app_environment.env.default_domain}"
+        }
+      }
+      dynamic "env" {
+        for_each = each.key == "api-gateway" ? [1] : []
+        content {
+          name  = "DEPLOYMENT_SERVICE_URL"
+          value = "https://iac-deployment-service.internal.${azurerm_container_app_environment.env.default_domain}"
+        }
+      }
+      dynamic "env" {
+        for_each = each.key == "api-gateway" ? [1] : []
+        content {
+          name  = "DRIFT_SERVICE_URL"
+          value = "https://iac-drift-service.internal.${azurerm_container_app_environment.env.default_domain}"
+        }
+      }
+      dynamic "env" {
+        for_each = each.key == "api-gateway" ? [1] : []
+        content {
+          name  = "NOTIFICATION_SERVICE_URL"
+          value = "https://iac-notification-service.internal.${azurerm_container_app_environment.env.default_domain}"
+        }
       }
     }
 
-    # SCALE TO ZERO when no requests
     min_replicas = 0
     max_replicas = 2
 
@@ -133,5 +232,20 @@ resource "azurerm_container_app" "services" {
   secret {
     name  = "acr-password"
     value = azurerm_container_registry.acr.admin_password
+  }
+
+  secret {
+    name  = "jwt-secret"
+    value = var.jwt_secret
+  }
+
+  secret {
+    name  = "db-user"
+    value = var.db_user
+  }
+
+  secret {
+    name  = "db-password"
+    value = var.db_password
   }
 }

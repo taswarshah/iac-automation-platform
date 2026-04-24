@@ -1,71 +1,146 @@
-name: Build and Deploy to Azure
+name: Build and Deploy to Azure Container Apps
 
 on:
   push:
     branches: [ main ]
+
+env:
+  ACR_NAME: iacplatformacrdev
+  ACR_LOGIN_SERVER: iacplatformacrdev.azurecr.io
+  RESOURCE_GROUP: iac-platform-dev-rg
+  CONTAINER_APP_ENV: iac-platform-env
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        service: [
-          'api-gateway', 
-          'auth-service', 
-          'project-service', 
-          'template-service', 
-          'code-gen-service', 
-          'policy-service', 
-          'deployment-service', 
-          'drift-service', 
-          'notification-service'
-        ]
-    
+        include:
+          - service: api-gateway
+            context: microservices/api-gateway
+            port: 3000
+          - service: auth-service
+            context: microservices/auth-service
+            port: 3001
+          - service: project-service
+            context: microservices/project-service
+            port: 3002
+          - service: template-service
+            context: microservices/template-service
+            port: 3003
+          - service: code-gen-service
+            context: microservices/code-gen-service
+            port: 3004
+          - service: policy-service
+            context: microservices/policy-service
+            port: 3005
+          - service: deployment-service
+            context: microservices/deployment-service
+            port: 3006
+          - service: drift-service
+            context: microservices/drift-service
+            port: 3007
+          - service: notification-service
+            context: microservices/notification-service
+            port: 3008
+
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Azure Login
-        uses: azure/login@v1
+        uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Login to ACR
-        run: |
-          az acr login --name iacplatformacrdev
+        run: az acr login --name ${{ env.ACR_NAME }}
 
       - name: Build and Push Docker image
         run: |
-          cd microservices/${{ matrix.service }}
-          docker build -t iacplatformacrdev.azurecr.io/iac-${{ matrix.service }}:latest .
-          docker push iacplatformacrdev.azurecr.io/iac-${{ matrix.service }}:latest
+          IMAGE=${{ env.ACR_LOGIN_SERVER }}/iac-${{ matrix.service }}
+          docker build -t $IMAGE:${{ github.sha }} -t $IMAGE:latest ${{ matrix.context }}
+          docker push $IMAGE:${{ github.sha }}
+          docker push $IMAGE:latest
 
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
-
       - name: Azure Login
-        uses: azure/login@v1
+        uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Deploy to Container Apps
+      - name: Install Container Apps extension
+        run: az extension add --name containerapp --upgrade --yes
+
+      - name: Get Container Apps Environment FQDN suffix
+        id: env-info
         run: |
-          az extension add --name containerapp --upgrade
-          
-          SERVICES=(
-            "api-gateway" "auth-service" "project-service" "template-service" 
-            "code-gen-service" "policy-service" "deployment-service" 
-            "drift-service" "notification-service"
-          )
-          
-          for SERVICE in "${SERVICES[@]}"; do
-            echo "Deploying $SERVICE..."
+          DOMAIN=$(az containerapp env show \
+            --name ${{ env.CONTAINER_APP_ENV }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --query "properties.defaultDomain" -o tsv)
+          echo "domain=$DOMAIN" >> $GITHUB_OUTPUT
+
+      - name: Deploy API Gateway
+        run: |
+          az containerapp update \
+            --name iac-api-gateway \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.ACR_LOGIN_SERVER }}/iac-api-gateway:${{ github.sha }} \
+            --set-env-vars \
+              PORT=3000 \
+              JWT_SECRET=secretref:jwt-secret \
+              CORS_ORIGIN=* \
+              DB_SERVER=${{ secrets.DB_SERVER }} \
+              DB_NAME=${{ secrets.DB_NAME }} \
+              DB_USER=secretref:db-user \
+              DB_PASSWORD=secretref:db-password \
+              DB_PORT=1433 \
+              AUTH_SERVICE_URL=https://iac-auth-service.internal.${{ steps.env-info.outputs.domain }} \
+              PROJECT_SERVICE_URL=https://iac-project-service.internal.${{ steps.env-info.outputs.domain }} \
+              TEMPLATE_SERVICE_URL=https://iac-template-service.internal.${{ steps.env-info.outputs.domain }} \
+              CODE_GEN_SERVICE_URL=https://iac-code-gen-service.internal.${{ steps.env-info.outputs.domain }} \
+              POLICY_SERVICE_URL=https://iac-policy-service.internal.${{ steps.env-info.outputs.domain }} \
+              DEPLOYMENT_SERVICE_URL=https://iac-deployment-service.internal.${{ steps.env-info.outputs.domain }} \
+              DRIFT_SERVICE_URL=https://iac-drift-service.internal.${{ steps.env-info.outputs.domain }} \
+              NOTIFICATION_SERVICE_URL=https://iac-notification-service.internal.${{ steps.env-info.outputs.domain }}
+
+      - name: Deploy Backend Services
+        run: |
+          SERVICES=("auth-service:3001" "project-service:3002" "template-service:3003" "code-gen-service:3004" "policy-service:3005" "deployment-service:3006" "drift-service:3007" "notification-service:3008")
+
+          for ENTRY in "${SERVICES[@]}"; do
+            SERVICE="${ENTRY%%:*}"
+            PORT="${ENTRY##*:}"
+
+            echo "Deploying $SERVICE on port $PORT..."
             az containerapp update \
               --name iac-$SERVICE \
-              --resource-group iac-platform-dev-rg \
-              --image iacplatformacrdev.azurecr.io/iac-$SERVICE:latest
+              --resource-group ${{ env.RESOURCE_GROUP }} \
+              --image ${{ env.ACR_LOGIN_SERVER }}/iac-$SERVICE:${{ github.sha }} \
+              --set-env-vars \
+                PORT=$PORT \
+                DB_SERVER=${{ secrets.DB_SERVER }} \
+                DB_NAME=${{ secrets.DB_NAME }} \
+                DB_USER=secretref:db-user \
+                DB_PASSWORD=secretref:db-password \
+                DB_PORT=1433 \
+                JWT_SECRET=secretref:jwt-secret \
+                CORS_ORIGIN=*
+          done
+
+      - name: Verify Deployments
+        run: |
+          echo "Verifying deployments..."
+          SERVICES=("api-gateway" "auth-service" "project-service" "template-service" "code-gen-service" "policy-service" "deployment-service" "drift-service" "notification-service")
+
+          for SERVICE in "${SERVICES[@]}"; do
+            STATUS=$(az containerapp show \
+              --name iac-$SERVICE \
+              --resource-group ${{ env.RESOURCE_GROUP }} \
+              --query "properties.runningStatus" -o tsv 2>/dev/null || echo "unknown")
+            echo "  iac-$SERVICE: $STATUS"
           done
